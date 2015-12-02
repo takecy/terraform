@@ -1,6 +1,8 @@
 package vsphere
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/terraform"
 )
@@ -25,9 +27,16 @@ func Provider() terraform.ResourceProvider {
 
 			"vsphere_server": &schema.Schema{
 				Type:        schema.TypeString,
-				Required:    true,
+				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("VSPHERE_SERVER", nil),
 				Description: "The vSphere Server name for vSphere API operations.",
+			},
+
+			"vcenter_server": &schema.Schema{
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("VSPHERE_VCENTER", nil),
+				Deprecated:  "This field has been renamed to vsphere_server.",
 			},
 		},
 
@@ -40,10 +49,24 @@ func Provider() terraform.ResourceProvider {
 }
 
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
+	// Handle backcompat support for vcenter_server; once that is removed,
+	// vsphere_server can just become a Required field that is referenced inline
+	// in Config below.
+	server := d.Get("vsphere_server").(string)
+
+	if server == "" {
+		server = d.Get("vcenter_server").(string)
+	}
+
+	if server == "" {
+		return nil, fmt.Errorf(
+			"One of vsphere_server or [deprecated] vcenter_server must be provided.")
+	}
+
 	config := Config{
 		User:          d.Get("user").(string),
 		Password:      d.Get("password").(string),
-		VSphereServer: d.Get("vsphere_server").(string),
+		VSphereServer: server,
 	}
 
 	return config.Client()
